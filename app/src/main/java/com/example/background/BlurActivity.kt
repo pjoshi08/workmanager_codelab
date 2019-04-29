@@ -16,14 +16,18 @@
 
 package com.example.background
 
+import android.content.Intent
 import androidx.lifecycle.ViewModelProviders
 import android.os.Bundle
+import android.text.TextUtils
 import androidx.appcompat.app.AppCompatActivity
 import android.view.View
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.RadioGroup
+import androidx.lifecycle.Observer
+import androidx.work.Data
 import com.bumptech.glide.Glide
 
 
@@ -52,6 +56,46 @@ class BlurActivity : AppCompatActivity() {
             Glide.with(this).load(imageUri).into(imageView)
         }
 
+        goButton.setOnClickListener { viewModel.applyBlur(blurLevel) }
+
+        setObservers()
+
+        outputButton.setOnClickListener{
+            val currentUri = viewModel.outputUri
+            if (currentUri != null) {
+                val actionView = Intent(Intent.ACTION_VIEW, currentUri)
+                if (actionView.resolveActivity(packageManager) != null)
+                    startActivity(actionView)
+            }
+        }
+
+        cancelButton.setOnClickListener { viewModel.cancelWork() }
+    }
+
+    private fun setObservers() {
+        viewModel.savedWorkInfo.observe(this, Observer {
+            // If there are no matching work info, do nothing
+            if (it == null || it.isEmpty()) return@Observer
+
+            // We only care about the first output status.
+            // Every continuation has only one worker tagged TAG_OUTPUT
+            val workInfo = it[0]
+            val isFinished = workInfo.state.isFinished
+
+            if (isFinished)
+                showWorkFinished()
+            else
+                showWorkInProgress()
+
+            val outputData = workInfo.outputData
+            val outputUri = outputData.getString(KEY_IMAGE_URI)
+
+            // If there is an output file show "See File" button
+            if (!TextUtils.isEmpty(outputUri)) {
+                viewModel.setOutputUri(outputUri)
+                outputButton.visibility = View.VISIBLE
+            }
+        })
     }
 
     private fun bindResources() {
